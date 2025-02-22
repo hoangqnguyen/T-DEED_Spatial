@@ -347,7 +347,7 @@ class TDEEDModel(BaseRGBModel):
                 with torch.cuda.amp.autocast():
                     outputs = self._model(frame, y=label, inference=inference)
 
-                    if self._model._location_head:
+                    if self._location_head:
                         pred, predL, y = outputs
                     else:
                         pred, y = outputs
