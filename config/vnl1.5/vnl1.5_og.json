@@ -1,6 +1,6 @@
 {
     "frame_dir": "data/vnl_1.5/frames_224p",
-    "save_dir": "exp/vnl_1.5_big",
+    "save_dir": "exp/vnl_1.5_og",
     "store_dir": "exp/vnl_1.5_store",
     "store_mode": "load",
     "batch_size": 6,
@@ -14,7 +14,7 @@
     "mixup": true,
     "modality": "rgb",
     "num_classes": 6,
-    "num_epochs": 50,
+    "num_epochs": 150,
     "warm_up_epochs": 3,
     "start_val_epoch": 30,
     "temporal_arch": "ed_sgp_mixer",
