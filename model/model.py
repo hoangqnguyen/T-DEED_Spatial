@@ -24,6 +24,7 @@ from model.modules import (
     process_prediction,
     process_double_head,
     process_labels,
+    MLPHead,
 )
 from model.shift import make_temporal_shift
 
@@ -45,6 +46,7 @@ class TDEEDModel(BaseRGBModel):
             self._feature_arch = args.feature_arch
             assert "rny" in self._feature_arch, "Only rny supported for now"
             self._double_head = False
+            self._location_head_arch = args.location_head_arch
 
             if self._feature_arch.startswith(("rny002", "rny008")):
                 features = timm.create_model(
@@ -98,6 +100,20 @@ class TDEEDModel(BaseRGBModel):
 
             if self._radi_displacement > 0:
                 self._pred_displ = FCLayers(self._feat_dim, 1)
+
+            if self._location_head_arch == "fc":
+                self._pred_loc = FCLayers(self._feat_dim, 2)
+            elif self._location_head_arch == "mlp":
+                self._pred_loc = MLPHead(
+                    input_dim=self._feat_dim,
+                    hidden_dim=self._feat_dim * 4,
+                    num_layers=3,
+                    output_dim=2,
+                )
+            elif self._location_head_arch == None:
+                pass
+            else:
+                raise NotImplementedError(self._location_head_arch)
 
             # Augmentations and crop
             self.augmentation = T.Compose(
@@ -166,12 +182,25 @@ class TDEEDModel(BaseRGBModel):
             im_feat = im_feat + self.temp_enc.expand(batch_size, -1, -1)
 
             if self._temp_arch == "ed_sgp_mixer":
+                loc_feat = None
+                if self._location_head_arch:
+                    loc_feat = self._pred_loc(im_feat)
+
                 im_feat = self._temp_fine(im_feat)
                 if self._radi_displacement > 0:
                     displ_feat = self._pred_displ(im_feat).squeeze(-1)
                     im_feat = self._pred_fine(im_feat)
+                    if loc_feat is not None:
+                        return (
+                            {"im_feat": im_feat, "displ_feat": displ_feat},
+                            loc_feat,
+                            y,
+                        )
                     return {"im_feat": im_feat, "displ_feat": displ_feat}, y
                 im_feat = self._pred_fine(im_feat)
+
+                if loc_feat is not None:
+                    return im_feat, loc_feat, y
                 return im_feat, y
 
             else:
@@ -216,6 +245,7 @@ class TDEEDModel(BaseRGBModel):
 
         self._model.to(device)
         self._num_classes = args.num_classes + 1
+        self._location_head = args.location_head
 
     def epoch(
         self,
@@ -247,6 +277,10 @@ class TDEEDModel(BaseRGBModel):
             ).to(self.device)
 
         epoch_loss = 0.0
+
+        if self._location_head:
+            epoch_lossL = 0.0
+
         with torch.no_grad() if optimizer is None else nullcontext():
             for batch_idx, batch in enumerate(tqdm(loader)):
                 frame = batch["frame"].to(self.device).float()
@@ -311,7 +345,12 @@ class TDEEDModel(BaseRGBModel):
                 )
 
                 with torch.cuda.amp.autocast():
-                    pred, y = self._model(frame, y=label, inference=inference)
+                    outputs = self._model(frame, y=label, inference=inference)
+
+                    if self._model._location_head:
+                        pred, predL, y = outputs
+                    else:
+                        pred, y = outputs
 
                     if "labelD" in batch.keys():
                         predD = pred["displ_feat"]
@@ -322,6 +361,7 @@ class TDEEDModel(BaseRGBModel):
                         map_preds.append(pred_aux.cpu())
 
                     loss = 0.0
+                    lossL = 0.0  # Location loss
 
                     if self._model._double_head:
                         b, t, c = pred.shape
@@ -371,6 +411,23 @@ class TDEEDModel(BaseRGBModel):
                         predictions = pred.reshape(-1, self._num_classes)
 
                         loss += F.cross_entropy(predictions, label, **ce_kwargs)
+
+                    if self._location_head:
+                        labelL = batch["xy"].to(self.device).float()
+                        has_events = (
+                            label.argmax(-1) if label.ndim > 1 else label
+                        ) != 0
+                        lossL = (
+                            (
+                                F.l1_loss(predL, labelL, reduction="none")
+                                .mean(-1)
+                                .flatten()
+                            )
+                            * has_events.flatten()
+                        ).sum() / (has_events.sum() + 1e-6)
+
+                        epoch_lossL += lossL
+                        loss += lossL
 
                     if "labelD" in batch.keys():
                         lossD = F.mse_loss(predD, labelD, reduction="none")

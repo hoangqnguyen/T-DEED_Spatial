@@ -46,6 +46,7 @@ class ActionSpotDataset(Dataset):
         pad_len=DEFAULT_PAD_LEN,  # Number of frames to pad the start
         # and end of videos
         dataset="finediving",  # Dataset name
+        location_head=False,  # Location head usage
     ):
         self._src_file = label_file
         self._labels = load_json(label_file)
@@ -55,6 +56,7 @@ class ActionSpotDataset(Dataset):
         self._dataset = dataset
         self._store_dir = store_dir
         self._store_mode = store_mode
+        self._location_head = location_head
         assert store_mode in ["store", "load"]
         self._clip_len = clip_len
         assert clip_len > 0
@@ -217,9 +219,19 @@ class ActionSpotDataset(Dataset):
                                         label_idx + self._radi_displacement + 1,
                                     ),
                                 ):
-                                    labels.append({"label": label, "label_idx": i})
+                                    labels.append(
+                                        {
+                                            "label": label,
+                                            "label_idx": i,
+                                            "xy": event.get("xy", [0.0, 0.0]),
+                                        }
+                                    )
                                     labelsD.append(
-                                        {"displ": i - label_idx, "label_idx": i}
+                                        {
+                                            "displ": i - label_idx,
+                                            "label_idx": i,
+                                            "xy": event.get("xy", [0.0, 0.0]),
+                                        }
                                     )
                         else:  # EXCLUDE OR MODIFY FOR RADI OF 0
                             if (
@@ -233,7 +245,13 @@ class ActionSpotDataset(Dataset):
                                         self._clip_len, label_idx + self._dilate_len + 1
                                     ),
                                 ):
-                                    labels.append({"label": label, "label_idx": i})
+                                    labels.append(
+                                        {
+                                            "label": label,
+                                            "label_idx": i,
+                                            "xy": event.get("xy", [0.0, 0.0]),
+                                        }
+                                    )
 
                 if frames_paths[1] != -1:  # in case no frames were available
 
@@ -312,26 +330,36 @@ class ActionSpotDataset(Dataset):
 
         # Process labels
         labels = np.zeros(self._clip_len, np.int64)
+        if self._location_head:
+            xy = np.zeros((self._clip_len, 2), np.float32)
         for label in dict_label:
             labels[label["label_idx"]] = label["label"]
+            if self._location_head:
+                xy[label["label_idx"]] = label["xy"]
 
         if self._radi_displacement > 0:
             labelsD = np.zeros(self._clip_len, np.int64)
             for label in dict_labelD:
                 labelsD[label["label_idx"]] = label["displ"]
 
-            return {
+            data = {
                 "frame": frames,
                 "contains_event": int(np.sum(labels) > 0),
                 "label": labels,
                 "labelD": labelsD,
             }
 
-        return {
-            "frame": frames,
-            "contains_event": int(np.sum(labels) > 0),
-            "label": labels,
-        }
+        else:
+            data = {
+                "frame": frames,
+                "contains_event": int(np.sum(labels) > 0),
+                "label": labels,
+            }
+
+        if self._location_head:
+            data["xy"] = xy
+
+        return data
 
     def __getitem__(self, unused):
         ret = self._get_one()

@@ -72,6 +72,8 @@ def update_args(args, config):
     args.only_test = config["only_test"]
     args.criterion = config["criterion"]
     args.num_workers = config["num_workers"]
+    args.location_head_arch = config.get("location_head_arch", None)
+    args.location_head = args.location_head_arch is not None
     if "pretrain" in config:
         args.pretrain = config["pretrain"]
     else:
