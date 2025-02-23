@@ -419,7 +419,7 @@ class TDEEDModel(BaseRGBModel):
                         ) != 0
                         lossL = (
                             (
-                                F.l1_loss(predL, labelL, reduction="none")
+                                F.l1_loss(predL.sigmoid(), labelL, reduction="none")
                                 .mean(-1)
                                 .flatten()
                             )
@@ -468,9 +468,11 @@ class TDEEDModel(BaseRGBModel):
         self._model.eval()
         with torch.no_grad():
             with torch.cuda.amp.autocast() if use_amp else nullcontext():
-                pred, y = self._model(
+                outputs = self._model(
                     seq, inference=True, augment_inference=augment_inference
                 )
+            if self._location_head:
+                pred, loc, y = outputs
             if isinstance(pred, dict):
                 predD = pred["displ_feat"]
                 pred = pred["im_feat"]
@@ -485,6 +487,12 @@ class TDEEDModel(BaseRGBModel):
                 else:
                     pred = process_prediction(pred, predD)
                 pred_cls = torch.argmax(pred, axis=2)
+                if self._location_head:
+                    return (
+                        pred_cls.cpu().numpy(),
+                        pred.cpu().numpy(),
+                        loc.cpu().sigmoid().numpy(),
+                    )
                 return pred_cls.cpu().numpy(), pred.cpu().numpy()
             if isinstance(pred, tuple):
                 pred = pred[0]
@@ -494,6 +502,13 @@ class TDEEDModel(BaseRGBModel):
                 pred = torch.softmax(pred, axis=2)
 
             pred_cls = torch.argmax(pred, axis=2)
+
+            if self._location_head:
+                return (
+                    pred_cls.cpu().numpy(),
+                    pred.cpu().numpy(),
+                    loc.cpu().sigmoid().numpy(),
+                )
             return pred_cls.cpu().numpy(), pred.cpu().numpy()
 
 

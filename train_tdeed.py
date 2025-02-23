@@ -200,6 +200,7 @@ def main(args):
         epoch = 0
 
         print("START TRAINING EPOCHS")
+        # num_epochs = 0
         for epoch in range(epoch, num_epochs):
 
             time_train0 = time.time()
@@ -253,10 +254,11 @@ def main(args):
                             classes,
                             printed=False,
                             test=False,
+                            location_head=args.location_head,
                         )
                     time_map1 = time.time()
                     time_map = time_map1 - time_map0
-                    if val_mAP > best_criterion:
+                    if val_mAP >= best_criterion:
                         best_criterion = val_mAP
                         better = True
 
@@ -335,21 +337,11 @@ def main(args):
                 if better:
                     torch.save(
                         model.state_dict(),
-                        os.path.join(os.getcwd(), args.save_dir, "checkpoint_best.pt"),
+                        os.path.join(args.save_dir, "checkpoint_best.pt"),
                     )
 
     print("START INFERENCE")
-    model.load(
-        torch.load(
-            os.path.join(
-                os.getcwd(),
-                "checkpoints",
-                args.model.split("_")[0],
-                args.model,
-                "checkpoint_best.pt",
-            )
-        )
-    )
+    model.load(torch.load(os.path.join(args.save_dir, "checkpoint_best.pt")))
 
     eval_splits = EVAL_SPLITS
 
@@ -393,6 +385,7 @@ def main(args):
                 test=True,
                 augment=(args.dataset != "soccernet")
                 & (args.dataset != "soccernetball"),
+                location_head=args.location_head,
             )
 
             for i in range(len(mAPs)):

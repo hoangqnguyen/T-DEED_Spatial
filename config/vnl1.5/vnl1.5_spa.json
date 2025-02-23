@@ -1,6 +1,6 @@
 {
     "frame_dir": "data/vnl_1.5/frames_224p",
-    "save_dir": "exp/vnl_1.5_og",
+    "save_dir": "exp/vnl_1.5_spa",
     "store_dir": "exp/vnl_1.5spa_store",
     "store_mode": "load",
     "batch_size": 4,
