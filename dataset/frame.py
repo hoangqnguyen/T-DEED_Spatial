@@ -396,7 +396,7 @@ class FrameReader:
         return img
 
     def load_paths(self, video_name, start, end, stride=1, source_info=None):
-        if "vnl_" in self.dataset:
+        if "vnl_" in self.dataset or self.dataset == "hogak":
             path = os.path.join(self._frame_dir, video_name)
             ndigits = 6
 
@@ -433,7 +433,7 @@ class FrameReader:
                 pad_end += 1
                 continue
 
-            if "vnl_" in self.dataset:
+            if "vnl_" in self.dataset or self.dataset == "hogak":
                 frame = frame_num
                 frame_path = os.path.join(path, str(frame_num).zfill(ndigits) + ".jpg")
                 base_path = path
@@ -793,7 +793,7 @@ class FrameReaderVideo:
                 n_pad_start += 1
                 continue
 
-            if "vnl_" in self._dataset:
+            if "vnl_" in self._dataset or self._dataset == "hogak":
                 frame_path = os.path.join(
                     self._frame_dir, video_name, str(frame_num).zfill(6) + ".jpg"
                 )

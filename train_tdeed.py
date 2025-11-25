@@ -130,6 +130,10 @@ def main(args):
         args.crop_dim = None
 
     # initialize wandb
+    if args.save_dir is not None:
+        os.makedirs(args.save_dir + "/wandb_logs", exist_ok=True)
+        os.makedirs(args.save_dir, exist_ok=True)
+
     wandb.login()
     wandb.init(
         config=args,
